@@ -10,11 +10,4 @@ This project implements a **Secret Management Strategy** using Azure Key Vault a
 graph LR
     User((Admin)) --> KV[Azure Key Vault]
     KV -->|Managed Identity| ST[(Secure Storage)]
-    Internet -.->|Blocked| ST
- ```
- 
- ---
- ##  🛡️  Governance & Compliance
-* **Data Encryption:** All data stored is encrypted at rest using **256-bit AES** (Microsoft-managed keys).
-* **Network Firewall:** Access is restricted to `Deny` by default, ensuring only trusted services can communicate with the storage.
-* **Disaster Recovery:** Soft-delete and purge protection are configured to prevent malicious or accidental data loss.
+    Internet -.->|Blocked| ST 
