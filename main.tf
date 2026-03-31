@@ -50,3 +50,4 @@ resource "azurerm_storage_account" "storage" {
   # Prevención de fugas: Deshabilitar acceso desde Internet público
   public_network_access_enabled = false
 }
+
