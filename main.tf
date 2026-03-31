@@ -1,4 +1,4 @@
-# 1. Configuración del Proveedor (Azure Resource Manager)
+# Configuración del proveedor y recursos principales de seguridad
 terraform {
   required_providers {
     azurerm = {
@@ -11,43 +11,53 @@ terraform {
 provider "azurerm" {
   features {
     key_vault {
-      # Protección contra borrado accidental (Purge Protection)
+      # Protección contra borrado accidental
       purge_soft_delete_on_destroy = true
     }
   }
 }
 
-# 2. Grupo de Recursos (El contenedor lógico de tu lab)
+# Obtener configuración del cliente actual
+data "azurerm_client_config" "current" {}
+
+# 1. Grupo de Recursos
 resource "azurerm_resource_group" "rg" {
   name     = "rg-security-lab-prod"
-  location = var.location # Usa la variable que ya definiste en variables.tf
+  location = var.location
 }
 
-# 3. Azure Key Vault (Tu bóveda de seguridad)
+# 2. Azure Key Vault (Blindado con Network ACLs)
 resource "azurerm_key_vault" "vault" {
-  name                = var.vault_name
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  tenant_id           = "00000000-0000-0000-0000-000000000000" # ID de ejemplo para portafolio
-  sku_name            = "standard"
+  name                        = var.vault_name
+  location                    = azurerm_resource_group.rg.location
+  resource_group_name         = azurerm_resource_group.rg.name
+  enabled_for_disk_encryption = true
+  tenant_id                   = data.azurerm_client_config.current.tenant_id
+  sku_name                    = "standard"
 
-  # Configuración de Red: Bloqueo de acceso público (Zero Trust)
+  # Bloque de seguridad de red: Denegar acceso por defecto
   network_acls {
     default_action = "Deny"
     bypass         = "AzureServices"
   }
 }
 
-# 4. Storage Account (Almacenamiento Cifrado)
+# 3. Storage Account (Blindado con TLS 1.2 y Reglas de Red)
 resource "azurerm_storage_account" "storage" {
   name                     = var.storage_name
   resource_group_name      = azurerm_resource_group.rg.name
   location                 = azurerm_resource_group.rg.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
-
   
-  # Prevención de fugas: Deshabilitar acceso desde Internet público
+  # Configuraciones críticas de Ciberseguridad
+  enable_https_traffic_only     = true
+  min_tls_version               = "TLS1_2"
   public_network_access_enabled = false
-}
 
+  # Reglas de red para el almacenamiento
+  network_rules {
+    default_action = "Deny"
+    bypass         = ["AzureServices"]
+  }
+}
