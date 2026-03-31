@@ -45,6 +45,7 @@ resource "azurerm_storage_account" "storage" {
   location                 = azurerm_resource_group.rg.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
+
   
   # Prevención de fugas: Deshabilitar acceso desde Internet público
   public_network_access_enabled = false
