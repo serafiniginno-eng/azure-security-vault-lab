@@ -1,0 +1,14 @@
+# Terraform: Archivos de estado (CONTIENEN SECRETOS)
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Carpeta de trabajo local
+.terraform/
+
+# Variables privadas
+*.tfvars
+*.tfvars.json
+
+# Logs y temporales
+*.log
