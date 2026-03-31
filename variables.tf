@@ -1,14 +1,14 @@
 variable "location" {
-  type    = string
-  default = "East US"
+  description = "The Azure Region where all resources in this example should be created."
+  default     = "East US"
 }
 
 variable "vault_name" {
-  type    = string
-  default = "kv-secure-lab-001" 
+  description = "The name of the Key Vault."
+  default     = "kv-security-lab-001"
 }
 
 variable "storage_name" {
-  type    = string
-  default = "stsecdatalab001" # Solo minúsculas y números
+  description = "The name of the Storage Account."
+  default     = "stsecuritylab001"
 }
