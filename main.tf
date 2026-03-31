@@ -33,7 +33,7 @@ resource "azurerm_key_vault" "vault" {
   resource_group_name         = azurerm_resource_group.rg.name
   enabled_for_disk_encryption = true
   tenant_id                   = data.azurerm_client_config.current.tenant_id
-  sku_name                    = "standard"
+  enable_rbac_authorization   = true
 
   # Bloque de seguridad de red: Denegar acceso por defecto
   network_acls {
@@ -117,5 +117,37 @@ resource "azurerm_monitor_scheduled_query_rules_alert" "unauthorized_access_aler
   trigger {
     operator  = "GreaterThan"
     threshold = 0
+  }
+}
+
+# Definición de la Identidad Gestionada por el Usuario
+resource "azurerm_user_assigned_identity" "app_id" {
+  name                = "id-web-app-prod-001" # Nomenclatura estándar
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  tags = {
+    ManagedBy   = "Terraform"
+    Project     = "SecurityLab"
+    Environment = "Production"
+  }
+}
+# 1. El Puente: Asignación de Rol (Principio de Mínimo Privilegio)
+# Estándar: Azure WAF - Seguridad de Identidad
+resource "azurerm_role_assignment" "app_kv_reader" {
+  scope                = azurerm_key_vault.vault.id
+  role_definition_name = "Key Vault Secrets User" # Solo lectura de secretos
+  principal_id         = azurerm_user_assigned_identity.app_id.principal_id
+}
+
+# 2. El Contenido: Secreto con cumplimiento de directivas (CIS 8.1)
+resource "azurerm_key_vault_secret" "db_password" {
+  name            = "db-password-prod"
+  value           = "M0v3r_T3rr4f0rm_S3cur3!" # Valor sensible cifrado
+  key_vault_id    = azurerm_key_vault.vault.id
+  expiration_date = "2026-12-31T23:59:59Z" # Fecha de expiración obligatoria
+
+  tags = {
+    DataClassification = "Confidential"
   }
 }
