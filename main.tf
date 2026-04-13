@@ -151,3 +151,80 @@ resource "azurerm_key_vault_secret" "db_password" {
     DataClassification = "Confidential"
   }
 }
+
+# 1. Creación de la Red Virtual (VNET)
+resource "azurerm_virtual_network" "vnet" {
+  name                = "vnet-security-lab"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+# 2. Subnet dedicada para Private Endpoints
+# Es una buena práctica separar los endpoints de las máquinas virtuales o apps
+resource "azurerm_subnet" "pe_subnet" {
+  name                 = "snet-private-endpoints"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.0.1.0/24"]
+
+  # Bloqueo de políticas de red para Private Endpoints (Requerido por Azure)
+  private_endpoint_network_policies_enabled = true
+}
+# 3. Zona DNS Privada para Key Vault
+resource "azurerm_private_dns_zone" "dnsvault" {
+  name                = "privatelink.vaultcore.azure.net"
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+# 4. Vincular el DNS con tu VNET
+resource "azurerm_private_dns_zone_virtual_network_link" "dns_link" {
+  name                  = "dns-link-vnet"
+  resource_group_name   = azurerm_resource_group.rg.name
+  private_dns_zone_name = azurerm_private_dns_zone.dnsvault.name
+  virtual_network_id    = azurerm_virtual_network.vnet.id
+}
+
+resource "azurerm_key_vault" "vault" {
+  name                        = var.vault_name
+  location                    = azurerm_resource_group.rg.location
+  resource_group_name         = azurerm_resource_group.rg.name
+  tenant_id                   = data.azurerm_client_config.current.tenant_id
+  sku_name                    = var.kv_sku
+  enable_rbac_authorization   = true
+
+  # --- CONFIGURACIÓN DE BLINDAJE (NIST/CIS) ---
+  
+  # Desactiva el acceso desde internet completamente
+  public_network_access_enabled = false 
+
+  # Protección contra Ransomware: permite recuperar el Vault si es borrado
+  soft_delete_retention_days = 90
+  
+  # Impide que los secretos se eliminen permanentemente antes de los 90 días
+  purge_protection_enabled   = true
+
+  network_acls {
+    default_action = "Deny"
+    bypass         = "AzureServices"
+  }
+}
+
+resource "azurerm_private_endpoint" "kv_pe" {
+  name                = "pe-${var.vault_name}"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.pe_subnet.id # Referencia a la subred del Paso 1
+
+  private_service_connection {
+    name                           = "psc-keyvault-connection"
+    private_connection_resource_id = azurerm_key_vault.vault.id
+    is_manual_connection           = false
+    subresource_names              = ["vault"] # Indica que nos conectamos al servicio de secretos
+  }
+
+  private_dns_zone_group {
+    name                 = "dns-group-kv"
+    private_dns_zone_ids = [azurerm_private_dns_zone.dnsvault.id] # Referencia al Paso 2
+  }
+}
