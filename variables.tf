@@ -12,3 +12,12 @@ variable "storage_name" {
   description = "The name of the Storage Account."
   default     = "stsecuritylab001"
 }
+
+variable "kv_sku" {
+  description = "El SKU del Key Vault (standard o premium)."
+  type        = string
+  default     = "standard"
+}
+terraform init
+terraform plan
+terraform apply
