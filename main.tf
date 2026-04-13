@@ -150,3 +150,67 @@ resource "azurerm_monitor_scheduled_query_rules_alert" "unauthorized_access_aler
     threshold = 0
   }
 }
+
+# 1. Activar Microsoft Sentinel sobre el Log Analytics Workspace existente
+resource "azurerm_sentinel_log_analytics_workspace_onboarding" "sentinel_onboarding" {
+  workspace_id = azurerm_log_analytics_workspace.law.id
+}
+# 2. Conector para Azure Activity (Detecta cambios en la infraestructura)
+resource "azurerm_sentinel_data_connector_azure_activity" "azure_activity" {
+  name                       = "connector-azure-activity"
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.law.id
+  depends_on                 = [azurerm_sentinel_log_analytics_workspace_onboarding.sentinel_onboarding]
+}
+
+# 3. Conector para Azure Active Directory (Detecta inicios de sesión sospechosos)
+resource "azurerm_sentinel_data_connector_azure_active_directory" "aad" {
+  name                       = "connector-aad"
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.law.id
+  depends_on                 = [azurerm_sentinel_log_analytics_workspace_onboarding.sentinel_onboarding]
+}
+# 4. Regla de Analítica: Detección de Fuerza Bruta en Key Vault
+resource "azurerm_sentinel_log_analytics_rule_scheduled" "kv_brute_force" {
+  name                       = "rule-kv-brute-force-detection"
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.law.id
+  display_name               = "Posible Fuerza Bruta en Key Vault (MITRE T1110)"
+  severity                   = "High"
+  query                      = <<-KQL
+    AzureDiagnostics
+    | where ResourceProvider == "MICROSOFT.KEYVAULT"
+    | where ResultSignature == "Forbidden"
+    | summarize AnomalyCount = count() by bin(TimeGenerated, 1h), CallerIPAddress, Resource
+    | where AnomalyCount > 5
+  KQL
+
+  # Mapeo de Entidades para investigación (Clave para un SOC)
+  entity_mapping {
+    entity_type = "IP"
+    field_mapping {
+      identifier = "Address"
+      column_name = "CallerIPAddress"
+    }
+  }
+
+  tactics  = ["CredentialAccess"]
+  techniques = ["T1110"] # Brute Force
+}
+# 5. Regla de Automatización para Triaging
+resource "azurerm_sentinel_automation_rule" "auto_triage" {
+  name                       = "rule-auto-triage-critical"
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.law.id
+  display_name               = "Auto-Triage: Incidentes de Key Vault"
+  order                      = 1
+  
+  action_incident {
+    order                  = 1
+    status                 = "Active"
+    classification         = "TruePositive"
+    severity               = "High"
+  }
+
+  condition {
+    operator = "Contains"
+    property = "IncidentTitle"
+    values   = ["Key Vault"]
+  }
+}
