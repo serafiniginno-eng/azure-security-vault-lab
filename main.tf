@@ -228,3 +228,4 @@ resource "azurerm_private_endpoint" "kv_pe" {
     private_dns_zone_ids = [azurerm_private_dns_zone.dnsvault.id] # Referencia al Paso 2
   }
 }
+
